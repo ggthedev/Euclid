@@ -31,16 +31,14 @@
 
 /// A 3D surface constructed from polygons
 public struct Mesh: Hashable {
-    public private(set) var bounds: Bounds
-    public var polygons: [Polygon] {
-        didSet {
-            bounds = Bounds(bounds: polygons.map { $0.bounds })
-            polygons = polygons.flatMap { $0.tessellate() }
-        }
-    }
+    private let storage: Storage
 }
 
 public extension Mesh {
+    /// Public properties
+    var polygons: [Polygon] { return storage.polygons }
+    var bounds: Bounds { return storage.bounds }
+
     /// Polygons grouped by material
     var polygonsByMaterial: [Polygon.Material: [Polygon]] {
         var polygonsByMaterial = [Polygon.Material: [Polygon]]()
@@ -67,28 +65,41 @@ public extension Mesh {
                 return polygon
             }
             return $0
-        }, bounds: bounds)
+        })
     }
 
     /// Returns a new Mesh that includes all polygons from both the
     /// parameter and receiver. Polygons are neither split nor removed.
     func merge(_ mesh: Mesh) -> Mesh {
-        return Mesh(
-            unchecked: polygons + mesh.polygons,
-            bounds: bounds.union(mesh.bounds)
-        )
+        return Mesh(unchecked: polygons + mesh.polygons)
     }
 }
 
 internal extension Mesh {
     init(unchecked polygons: [Polygon]) {
-        self.init(unchecked: polygons, bounds: Bounds(bounds: polygons.map { $0.bounds }))
-    }
-
-    init(unchecked polygons: [Polygon], bounds: Bounds) {
         assert(polygons.allSatisfy { $0.isConvex })
-        assert(bounds.isEqual(to: Bounds(bounds: polygons.map { $0.bounds })))
-        self.bounds = bounds
-        self.polygons = polygons
+        storage = Storage(polygons: polygons)
+    }
+}
+
+private extension Mesh {
+    final class Storage: Hashable {
+        let polygons: [Polygon]
+
+        lazy var bounds: Bounds = {
+            return Bounds(points: polygons.flatMap { $0.vertices.map { $0.position } })
+        }()
+
+        static func == (lhs: Storage, rhs: Storage) -> Bool {
+            return lhs === rhs || lhs.polygons == rhs.polygons
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(polygons)
+        }
+
+        init(polygons: [Polygon]) {
+            self.polygons = polygons
+        }
     }
 }

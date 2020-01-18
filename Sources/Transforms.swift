@@ -80,10 +80,7 @@ public extension Transform {
 
 public extension Mesh {
     func translated(by v: Vector) -> Mesh {
-        return Mesh(
-            unchecked: polygons.map { $0.translated(by: v) },
-            bounds: bounds.translated(by: v)
-        )
+        return Mesh(unchecked: polygons.map { $0.translated(by: v) })
     }
 
     func rotated(by m: Rotation) -> Mesh {
@@ -95,10 +92,7 @@ public extension Mesh {
             // optimization - avoids scaling normals
             return scaled(by: v.x)
         }
-        return Mesh(
-            unchecked: polygons.map { $0.scaled(by: v) },
-            bounds: bounds.scaled(by: v)
-        )
+        return Mesh(unchecked: polygons.map { $0.scaled(by: v) })
     }
 
     func scaled(by f: Double) -> Mesh {
@@ -120,7 +114,6 @@ public extension Polygon {
             unchecked: vertices.map { $0.translated(by: v) },
             normal: plane.normal,
             isConvex: isConvex,
-            bounds: bounds.translated(by: v),
             material: material
         )
     }
@@ -151,7 +144,6 @@ public extension Polygon {
             unchecked: flipped ? vertices.reversed() : vertices,
             normal: plane.normal.scaled(by: vn).normalized(),
             isConvex: isConvex,
-            bounds: bounds.scaled(by: v),
             material: material
         )
     }
@@ -163,7 +155,6 @@ public extension Polygon {
             unchecked: vertices.map { $0.scaled(by: f) },
             normal: plane.normal,
             isConvex: isConvex,
-            bounds: bounds.scaled(by: f),
             material: material
         )
         return f < 0 ? polygon.inverted() : polygon
@@ -181,7 +172,6 @@ public extension Polygon {
             unchecked: flipped ? vertices.reversed() : vertices,
             normal: plane.normal,
             isConvex: isConvex,
-            bounds: bounds,
             material: material
         )
     }

@@ -45,17 +45,9 @@ public extension Mesh {
     ///          +-------+            +-------+
     ///
     func union(_ mesh: Mesh) -> Mesh {
-        var ap = polygons
-        var bp = mesh.polygons
-        var aout: [Polygon]? = []
-        var bout: [Polygon]? = []
-        boundsTest(&ap, &bp, &aout, &bout)
-        ap = BSPNode(mesh.polygons).clip(ap, .greaterThan)
-        bp = BSPNode(polygons).clip(bp, .greaterThanEqual)
-        return Mesh(
-            unchecked: aout! + bout! + ap + bp,
-            bounds: bounds.union(mesh.bounds)
-        )
+        let ap = BSPNode(mesh.polygons).clip(polygons, .greaterThan)
+        let bp = BSPNode(polygons).clip(mesh.polygons, .greaterThanEqual)
+        return Mesh(unchecked: ap + bp)
     }
 
     /// Efficiently form union from multiple meshes
@@ -76,14 +68,9 @@ public extension Mesh {
     ///          +-------+
     ///
     func subtract(_ mesh: Mesh) -> Mesh {
-        var ap = polygons
-        var bp = mesh.polygons
-        var aout: [Polygon]? = []
-        var bout: [Polygon]?
-        boundsTest(&ap, &bp, &aout, &bout)
-        ap = BSPNode(mesh.polygons).clip(ap, .greaterThan)
-        bp = BSPNode(polygons).clip(bp, .lessThan)
-        return Mesh(unchecked: aout! + ap + bp.map { $0.inverted() })
+        let ap = BSPNode(mesh.polygons).clip(polygons, .greaterThan)
+        let bp = BSPNode(polygons).clip(mesh.polygons, .lessThan)
+        return Mesh(unchecked: ap + bp.map { $0.inverted() })
     }
 
     /// Efficiently subtract multiple meshes
@@ -104,21 +91,16 @@ public extension Mesh {
     ///          +-------+            +-------+
     ///
     func xor(_ mesh: Mesh) -> Mesh {
-        var ap = polygons
-        var bp = mesh.polygons
-        var aout: [Polygon]? = []
-        var bout: [Polygon]? = []
-        boundsTest(&ap, &bp, &aout, &bout)
         let absp = BSPNode(polygons)
         let bbsp = BSPNode(mesh.polygons)
         // TODO: combine clip operations
-        let ap1 = bbsp.clip(ap, .greaterThan)
-        let bp1 = absp.clip(bp, .lessThan)
-        let ap2 = bbsp.clip(ap, .lessThan)
-        let bp2 = absp.clip(bp, .greaterThan)
+        let ap1 = bbsp.clip(polygons, .greaterThan)
+        let bp1 = absp.clip(mesh.polygons, .lessThan)
+        let ap2 = bbsp.clip(polygons, .lessThan)
+        let bp2 = absp.clip(mesh.polygons, .greaterThan)
         // Avoids slow compilation from long expression
-        let lhs = aout! + ap1 + bp1.map { $0.inverted() }
-        let rhs = bout! + bp2 + ap2.map { $0.inverted() }
+        let lhs = ap1 + bp1.map { $0.inverted() }
+        let rhs = bp2 + ap2.map { $0.inverted() }
         return Mesh(unchecked: lhs + rhs)
     }
 
@@ -141,12 +123,8 @@ public extension Mesh {
     ///          +-------+
     ///
     func intersect(_ mesh: Mesh) -> Mesh {
-        var ap = polygons
-        var bp = mesh.polygons
-        var aout, bout: [Polygon]?
-        boundsTest(&ap, &bp, &aout, &bout)
-        ap = BSPNode(mesh.polygons).clip(ap, .lessThan)
-        bp = BSPNode(polygons).clip(bp, .lessThanEqual)
+        let ap = BSPNode(mesh.polygons).clip(polygons, .lessThan)
+        let bp = BSPNode(polygons).clip(mesh.polygons, .lessThanEqual)
         return Mesh(unchecked: ap + bp)
     }
 
@@ -168,24 +146,18 @@ public extension Mesh {
     ///          +-------+
     ///
     func stencil(_ mesh: Mesh) -> Mesh {
-        var ap = polygons
-        var bp = mesh.polygons
-        var aout: [Polygon]? = []
-        var bout: [Polygon]?
-        boundsTest(&ap, &bp, &aout, &bout)
         // TODO: combine clip operations
         let bsp = BSPNode(mesh.polygons)
-        let outside = bsp.clip(ap, .greaterThan)
-        let inside = bsp.clip(ap, .lessThanEqual)
-        return Mesh(unchecked: aout! + outside + inside.map {
+        let outside = bsp.clip(polygons, .greaterThan)
+        let inside = bsp.clip(mesh.polygons, .lessThanEqual)
+        return Mesh(unchecked: outside + inside.map {
             Polygon(
                 unchecked: $0.vertices,
                 plane: $0.plane,
                 isConvex: $0.isConvex,
-                bounds: $0.bounds,
-                material: bp.first?.material ?? $0.material
+                material: mesh.polygons.first?.material ?? $0.material
             )
-        }, bounds: bounds)
+        })
     }
 
     /// Efficiently perform stencil with multiple meshes
@@ -195,88 +167,58 @@ public extension Mesh {
 
     /// Split mesh along a plane
     func split(along plane: Plane) -> (Mesh?, Mesh?) {
-        switch bounds.compare(with: plane) {
-        case .front:
-            return (self, nil)
-        case .back:
-            return (nil, self)
-        case .spanning, .coplanar:
-            var id = 0
-            var coplanar = [Polygon](), front = [Polygon](), back = [Polygon]()
-            for polygon in polygons {
-                polygon.split(along: plane, &coplanar, &front, &back, &id)
-            }
-            for polygon in coplanar where plane.normal.dot(polygon.plane.normal) > 0 {
-                front.append(polygon)
-            }
-            return (front.isEmpty ? nil : Mesh(front), back.isEmpty ? nil : Mesh(back))
+        var id = 0
+        var coplanar = [Polygon](), front = [Polygon](), back = [Polygon]()
+        for polygon in polygons {
+            polygon.split(along: plane, &coplanar, &front, &back, &id)
         }
+        for polygon in coplanar where plane.normal.dot(polygon.plane.normal) > 0 {
+            front.append(polygon)
+        }
+        return (front.isEmpty ? nil : Mesh(unchecked: front), back.isEmpty ? nil : Mesh(unchecked: back))
     }
 
     /// Clip mesh to a plane and optionally fill sheared aces with specified material
     func clip(to plane: Plane, fill: Polygon.Material = nil) -> Mesh {
-        switch bounds.compare(with: plane) {
-        case .front:
-            return self
-        case .back:
-            return Mesh([])
-        case .spanning, .coplanar:
-            var id = 0
-            var coplanar = [Polygon](), front = [Polygon](), back = [Polygon]()
-            for polygon in polygons {
-                polygon.split(along: plane, &coplanar, &front, &back, &id)
-            }
-            for polygon in coplanar where plane.normal.dot(polygon.plane.normal) > 0 {
-                front.append(polygon)
-            }
-            let mesh = Mesh(front)
-            guard let material = fill else {
-                return mesh
-            }
-            // Project each corner of mesh bounds onto plan to find radius
-            var radius = 0.0
-            for corner in mesh.bounds.corners {
-                let p = corner.project(onto: plane)
-                radius = max(radius, p.lengthSquared)
-            }
-            radius = radius.squareRoot()
-            // Create back face
-            let normal = Vector(0, 0, 1)
-            let angle = -normal.angle(with: plane.normal)
-            let axis = normal.cross(plane.normal).normalized()
-            let rotation = Rotation(unchecked: axis, radians: angle)
-            let rect = Polygon(
-                unchecked: [
-                    Vertex(Vector(-radius, radius, 0), -normal, .zero),
-                    Vertex(Vector(radius, radius, 0), -normal, Vector(1, 0, 0)),
-                    Vertex(Vector(radius, -radius, 0), -normal, Vector(1, 1, 0)),
-                    Vertex(Vector(-radius, -radius, 0), -normal, Vector(0, 1, 0)),
-                ],
-                normal: -normal,
-                isConvex: true,
-                material: material
-            )
-            .rotated(by: rotation)
-            .translated(by: plane.normal * plane.w)
-            // Clip rect
-            return Mesh(mesh.polygons + BSPNode(polygons).clip([rect], .lessThan))
+        var id = 0
+        var coplanar = [Polygon](), front = [Polygon](), back = [Polygon]()
+        for polygon in polygons {
+            polygon.split(along: plane, &coplanar, &front, &back, &id)
         }
-    }
-}
-
-private func boundsTest(
-    _ lhs: inout [Polygon], _ rhs: inout [Polygon],
-    _ lout: inout [Polygon]?, _ rout: inout [Polygon]?
-) {
-    let bbb = Bounds(bounds: rhs.map { $0.bounds })
-    let abb = Bounds(bounds: lhs.map { $0.bounds })
-    for (i, p) in lhs.enumerated().reversed() where !p.bounds.intersects(bbb) {
-        lout?.append(p)
-        lhs.remove(at: i)
-    }
-    for (i, p) in rhs.enumerated().reversed() where !p.bounds.intersects(abb) {
-        rout?.append(p)
-        rhs.remove(at: i)
+        for polygon in coplanar where plane.normal.dot(polygon.plane.normal) > 0 {
+            front.append(polygon)
+        }
+        let mesh = Mesh(front)
+        guard let material = fill else {
+            return mesh
+        }
+        // Project each corner of mesh bounds onto plan to find radius
+        var radius = 0.0
+        for corner in mesh.bounds.corners {
+            let p = corner.project(onto: plane)
+            radius = max(radius, p.lengthSquared)
+        }
+        radius = radius.squareRoot()
+        // Create back face
+        let normal = Vector(0, 0, 1)
+        let angle = -normal.angle(with: plane.normal)
+        let axis = normal.cross(plane.normal).normalized()
+        let rotation = Rotation(unchecked: axis, radians: angle)
+        let rect = Polygon(
+            unchecked: [
+                Vertex(Vector(-radius, radius, 0), -normal, .zero),
+                Vertex(Vector(radius, radius, 0), -normal, Vector(1, 0, 0)),
+                Vertex(Vector(radius, -radius, 0), -normal, Vector(1, 1, 0)),
+                Vertex(Vector(-radius, -radius, 0), -normal, Vector(0, 1, 0)),
+            ],
+            normal: -normal,
+            isConvex: true,
+            material: material
+        )
+        .rotated(by: rotation)
+        .translated(by: plane.normal * plane.w)
+        // Clip rect
+        return Mesh(mesh.polygons + BSPNode(polygons).clip([rect], .lessThan))
     }
 }
 

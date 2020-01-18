@@ -44,7 +44,6 @@ public extension Polygon {
     /// Public properties
     var vertices: [Vertex] { return storage.vertices }
     var plane: Plane { return storage.plane }
-    var bounds: Bounds { return storage.bounds }
     var isConvex: Bool { return storage.isConvex }
     var material: Material {
         get { return storage.material }
@@ -55,7 +54,6 @@ public extension Polygon {
                 storage = Storage(
                     vertices: vertices,
                     plane: plane,
-                    bounds: bounds,
                     isConvex: isConvex,
                     material: newValue
                 )
@@ -77,7 +75,7 @@ public extension Polygon {
     /// Test if point lies inside the polygon
     // https://stackoverflow.com/questions/217578/how-can-i-determine-whether-a-2d-point-is-within-a-polygon#218081
     func containsPoint(_ p: Vector) -> Bool {
-        guard plane.containsPoint(p), bounds.containsPoint(p) else {
+        guard plane.containsPoint(p) else {
             return false
         }
         let flatteningPlane = FlatteningPlane(normal: plane.normal)
@@ -120,7 +118,6 @@ public extension Polygon {
             unchecked: vertices.reversed().map { $0.inverted() },
             plane: plane.inverted(),
             isConvex: isConvex,
-            bounds: bounds,
             material: material
         )
     }
@@ -259,7 +256,6 @@ internal extension Polygon {
         storage = Storage(
             vertices: vertices,
             plane: plane ?? Plane(unchecked: points, convex: isConvex),
-            bounds: bounds ?? Bounds(points: points),
             isConvex: isConvex,
             material: material
         )
@@ -484,7 +480,6 @@ private extension Polygon {
     final class Storage: Hashable {
         let vertices: [Vertex]
         let plane: Plane
-        let bounds: Bounds
         let isConvex: Bool
         var material: Material
 
@@ -496,10 +491,9 @@ private extension Polygon {
             hasher.combine(vertices)
         }
 
-        init(vertices: [Vertex], plane: Plane, bounds: Bounds, isConvex: Bool, material: Material) {
+        init(vertices: [Vertex], plane: Plane, isConvex: Bool, material: Material) {
             self.vertices = vertices
             self.plane = plane
-            self.bounds = bounds
             self.isConvex = isConvex
             self.material = material
         }
