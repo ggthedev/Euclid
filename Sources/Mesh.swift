@@ -53,7 +53,7 @@ public extension Mesh {
 
     /// Construct a Mesh from a list of `Polygon` instances.
     init(_ polygons: [Polygon]) {
-        self.init(unchecked: polygons.flatMap { $0.tessellate() })
+        self.init(unchecked: polygons)
     }
 
     /// Replaces one material with another
@@ -77,7 +77,6 @@ public extension Mesh {
 
 internal extension Mesh {
     init(unchecked polygons: [Polygon]) {
-        assert(polygons.allSatisfy { $0.isConvex })
         storage = Storage(polygons: polygons)
     }
 }

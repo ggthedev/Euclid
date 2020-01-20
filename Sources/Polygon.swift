@@ -141,7 +141,7 @@ public extension Polygon {
         return polygons
     }
 
-    /// Tesselates polygon into triangles using the "ear clipping" method
+    /// Tessellates polygon into triangles using the "ear clipping" method
     func triangulate() -> [Polygon] {
         var vertices = self.vertices
         guard vertices.count > 3 else {
@@ -157,7 +157,8 @@ public extension Polygon {
                 unchecked: vertices,
                 plane: plane,
                 isConvex: true,
-                material: material
+                material: material,
+                id: id
             ))
             return true
         }
@@ -369,14 +370,10 @@ internal extension Polygon {
         _ outside: inout [Polygon],
         _ id: inout Int
     ) {
-        precondition(isConvex)
-        var toTest = [self]
+        var toTest = tessellate()
         for polygon in polygons where !toTest.isEmpty {
-            precondition(polygon.isConvex)
             var _outside = [Polygon]()
-            for p in toTest {
-                polygon.clip(p, &inside, &_outside, &id)
-            }
+            toTest.forEach { polygon.clip($0, &inside, &_outside, &id) }
             toTest = _outside
         }
         outside += toTest
@@ -388,13 +385,6 @@ internal extension Polygon {
         _ outside: inout [Polygon],
         _ id: inout Int
     ) {
-        precondition(isConvex)
-        guard polygon.isConvex else {
-            polygon.tessellate().forEach {
-                clip($0, &inside, &outside, &id)
-            }
-            return
-        }
         var polygon = polygon
         var coplanar = [Polygon]()
         for plane in edgePlanes {

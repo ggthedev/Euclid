@@ -519,7 +519,7 @@ public extension Mesh {
                 first != last, first.x != 0 || last.x != 0 {
                 polygons += polygons.map { $0.inverted() }
             }
-            return Mesh(polygons)
+            return Mesh(unchecked: polygons)
         }
     }
 
