@@ -80,11 +80,11 @@ public extension Transform {
 
 public extension Mesh {
     func translated(by v: Vector) -> Mesh {
-        return Mesh(unchecked: polygons.map { $0.translated(by: v) })
+        return Mesh(unchecked: polygons.map { $0.translated(by: v) }, isConvex: isConvex)
     }
 
     func rotated(by m: Rotation) -> Mesh {
-        return Mesh(unchecked: polygons.map { $0.rotated(by: m) })
+        return Mesh(unchecked: polygons.map { $0.rotated(by: m) }, isConvex: isConvex)
     }
 
     func scaled(by v: Vector) -> Mesh {
@@ -92,19 +92,19 @@ public extension Mesh {
             // optimization - avoids scaling normals
             return scaled(by: v.x)
         }
-        return Mesh(unchecked: polygons.map { $0.scaled(by: v) })
+        return Mesh(unchecked: polygons.map { $0.scaled(by: v) }, isConvex: isConvex)
     }
 
     func scaled(by f: Double) -> Mesh {
-        return Mesh(unchecked: polygons.map { $0.scaled(by: f) })
+        return Mesh(unchecked: polygons.map { $0.scaled(by: f) }, isConvex: isConvex)
     }
 
     func scaleCorrected(for v: Vector) -> Mesh {
-        return Mesh(unchecked: polygons.map { $0.scaleCorrected(for: v) })
+        return Mesh(unchecked: polygons.map { $0.scaleCorrected(for: v) }, isConvex: isConvex)
     }
 
     func transformed(by t: Transform) -> Mesh {
-        return Mesh(unchecked: polygons.map { $0.transformed(by: t) })
+        return Mesh(unchecked: polygons.map { $0.transformed(by: t) }, isConvex: isConvex)
     }
 }
 

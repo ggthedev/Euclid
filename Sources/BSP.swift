@@ -16,8 +16,8 @@ struct BSP {
         case lessThanEqual
     }
 
-    init(_ polygons: [Polygon]) {
-        root = BSPNode(polygons)
+    init(_ mesh: Mesh) {
+        root = BSPNode(mesh.polygons, isConvex: mesh.isConvex)
     }
 
     func clip(_ polygons: [Polygon], _ keeping: ClipRule) -> [Polygon] {
@@ -37,12 +37,12 @@ private class BSPNode {
     private var polygons = [Polygon]()
     private let plane: Plane
 
-    public init?(_ polygons: [Polygon]) {
+    public init?(_ polygons: [Polygon], isConvex: Bool) {
         guard let plane = polygons.first?.plane else {
             return nil
         }
         self.plane = plane
-        insert(polygons)
+        insert(polygons, isConvex: isConvex)
     }
 
     private init(plane: Plane, parent: BSPNode?) {
@@ -135,22 +135,30 @@ private class BSPNode {
         return total
     }
 
-    private func insert(_ polygons: [Polygon]) {
+    private func insert(_ polygons: [Polygon], isConvex: Bool) {
         var polygons = polygons
         var node = self
         while !polygons.isEmpty {
             var front = [Polygon](), back = [Polygon]()
-            do {
-                var id = 0
-                var coplanar = [Polygon]()
-                for polygon in polygons {
-                    polygon.split(along: node.plane, &coplanar, &front, &back, &id)
-                }
-                for polygon in coplanar {
+            for polygon in polygons {
+                switch polygon.compare(with: node.plane) {
+                case .coplanar:
                     if node.plane.normal.dot(polygon.plane.normal) > 0 {
                         node.polygons.append(polygon)
                     } else {
                         back.append(polygon)
+                    }
+                case .front:
+                    front.append(polygon)
+                case .back:
+                    back.append(polygon)
+                case .spanning:
+                    if isConvex {
+                        front.append(polygon)
+                        back.append(polygon)
+                    } else {
+                        var id = 0
+                        polygon.split(spanning: node.plane, &front, &back, &id)
                     }
                 }
             }
@@ -163,11 +171,11 @@ private class BSPNode {
             }
 
             if front.count > back.count {
-                node.back?.insert(back)
+                node.back?.insert(back, isConvex: isConvex)
                 polygons = front
                 node = node.front!
             } else {
-                node.front?.insert(front)
+                node.front?.insert(front, isConvex: isConvex)
                 polygons = back
                 node = node.back ?? node
             }

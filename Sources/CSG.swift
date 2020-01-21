@@ -45,9 +45,9 @@ public extension Mesh {
     ///          +-------+            +-------+
     ///
     func union(_ mesh: Mesh) -> Mesh {
-        let ap = BSP(mesh.polygons).clip(polygons, .greaterThan)
-        let bp = BSP(polygons).clip(mesh.polygons, .greaterThanEqual)
-        return Mesh(unchecked: ap + bp)
+        let ap = BSP(mesh).clip(polygons, .greaterThan)
+        let bp = BSP(self).clip(mesh.polygons, .greaterThanEqual)
+        return Mesh(unchecked: ap + bp, isConvex: false)
     }
 
     /// Efficiently form union from multiple meshes
@@ -68,9 +68,9 @@ public extension Mesh {
     ///          +-------+
     ///
     func subtract(_ mesh: Mesh) -> Mesh {
-        let ap = BSP(mesh.polygons).clip(polygons, .greaterThan)
-        let bp = BSP(polygons).clip(mesh.polygons, .lessThan)
-        return Mesh(unchecked: ap + bp.map { $0.inverted() })
+        let ap = BSP(mesh).clip(polygons, .greaterThan)
+        let bp = BSP(self).clip(mesh.polygons, .lessThan)
+        return Mesh(unchecked: ap + bp.map { $0.inverted() }, isConvex: false)
     }
 
     /// Efficiently subtract multiple meshes
@@ -91,8 +91,8 @@ public extension Mesh {
     ///          +-------+            +-------+
     ///
     func xor(_ mesh: Mesh) -> Mesh {
-        let absp = BSP(polygons)
-        let bbsp = BSP(mesh.polygons)
+        let absp = BSP(self)
+        let bbsp = BSP(mesh)
         // TODO: combine clip operations
         let ap1 = bbsp.clip(polygons, .greaterThan)
         let bp1 = absp.clip(mesh.polygons, .lessThan)
@@ -101,7 +101,7 @@ public extension Mesh {
         // Avoids slow compilation from long expression
         let lhs = ap1 + bp1.map { $0.inverted() }
         let rhs = bp2 + ap2.map { $0.inverted() }
-        return Mesh(unchecked: lhs + rhs)
+        return Mesh(unchecked: lhs + rhs, isConvex: false)
     }
 
     /// Efficiently xor multiple meshes
@@ -123,9 +123,9 @@ public extension Mesh {
     ///          +-------+
     ///
     func intersect(_ mesh: Mesh) -> Mesh {
-        let ap = BSP(mesh.polygons).clip(polygons, .lessThan)
-        let bp = BSP(polygons).clip(mesh.polygons, .lessThanEqual)
-        return Mesh(unchecked: ap + bp)
+        let ap = BSP(mesh).clip(polygons, .lessThan)
+        let bp = BSP(self).clip(mesh.polygons, .lessThanEqual)
+        return Mesh(unchecked: ap + bp, isConvex: isConvex && mesh.isConvex)
     }
 
     /// Efficiently compute intersection of multiple meshes
@@ -147,7 +147,7 @@ public extension Mesh {
     ///
     func stencil(_ mesh: Mesh) -> Mesh {
         // TODO: combine clip operations
-        let bsp = BSP(mesh.polygons)
+        let bsp = BSP(mesh)
         let outside = bsp.clip(polygons, .greaterThan)
         let inside = bsp.clip(polygons, .lessThanEqual)
         return Mesh(unchecked: outside + inside.map {
@@ -157,7 +157,7 @@ public extension Mesh {
                 isConvex: $0.isConvex,
                 material: mesh.polygons.first?.material ?? $0.material
             )
-        })
+        }, isConvex: isConvex)
     }
 
     /// Efficiently perform stencil with multiple meshes
@@ -175,7 +175,10 @@ public extension Mesh {
         for polygon in coplanar where plane.normal.dot(polygon.plane.normal) > 0 {
             front.append(polygon)
         }
-        return (front.isEmpty ? nil : Mesh(unchecked: front), back.isEmpty ? nil : Mesh(unchecked: back))
+        return (
+            front.isEmpty ? nil : Mesh(unchecked: front, isConvex: false),
+            back.isEmpty ? nil : Mesh(unchecked: back, isConvex: false)
+        )
     }
 
     /// Clip mesh to a plane and optionally fill sheared aces with specified material
@@ -218,7 +221,10 @@ public extension Mesh {
         .rotated(by: rotation)
         .translated(by: plane.normal * plane.w)
         // Clip rect
-        return Mesh(mesh.polygons + BSP(polygons).clip([rect], .lessThan))
+        return Mesh(
+            unchecked: mesh.polygons + BSP(self).clip([rect], .lessThan),
+            isConvex: fill == nil ? false : isConvex
+        )
     }
 }
 

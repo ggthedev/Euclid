@@ -53,7 +53,7 @@ public extension Mesh {
 
     /// Construct a Mesh from a list of `Polygon` instances.
     init(_ polygons: [Polygon]) {
-        self.init(unchecked: polygons)
+        self.init(unchecked: polygons, isConvex: false)
     }
 
     /// Replaces one material with another
@@ -65,25 +65,28 @@ public extension Mesh {
                 return polygon
             }
             return $0
-        })
+        }, isConvex: isConvex)
     }
 
     /// Returns a new Mesh that includes all polygons from both the
     /// parameter and receiver. Polygons are neither split nor removed.
     func merge(_ mesh: Mesh) -> Mesh {
-        return Mesh(unchecked: polygons + mesh.polygons)
+        return Mesh(unchecked: polygons + mesh.polygons, isConvex: false)
     }
 }
 
 internal extension Mesh {
-    init(unchecked polygons: [Polygon]) {
-        storage = Storage(polygons: polygons)
+    var isConvex: Bool { return storage.isConvex }
+
+    init(unchecked polygons: [Polygon], isConvex: Bool) {
+        storage = Storage(polygons: polygons, isConvex: isConvex)
     }
 }
 
 private extension Mesh {
     final class Storage: Hashable {
         let polygons: [Polygon]
+        let isConvex: Bool
 
         lazy var bounds: Bounds = {
             return Bounds(points: polygons.flatMap { $0.vertices.map { $0.position } })
@@ -97,8 +100,9 @@ private extension Mesh {
             hasher.combine(polygons)
         }
 
-        init(polygons: [Polygon]) {
+        init(polygons: [Polygon], isConvex: Bool) {
             self.polygons = polygons
+            self.isConvex = isConvex
         }
     }
 }
