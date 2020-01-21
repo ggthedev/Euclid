@@ -45,8 +45,8 @@ public extension Mesh {
     ///          +-------+            +-------+
     ///
     func union(_ mesh: Mesh) -> Mesh {
-        let ap = BSPNode(mesh.polygons).clip(polygons, .greaterThan)
-        let bp = BSPNode(polygons).clip(mesh.polygons, .greaterThanEqual)
+        let ap = BSP(mesh.polygons).clip(polygons, .greaterThan)
+        let bp = BSP(polygons).clip(mesh.polygons, .greaterThanEqual)
         return Mesh(unchecked: ap + bp)
     }
 
@@ -68,8 +68,8 @@ public extension Mesh {
     ///          +-------+
     ///
     func subtract(_ mesh: Mesh) -> Mesh {
-        let ap = BSPNode(mesh.polygons).clip(polygons, .greaterThan)
-        let bp = BSPNode(polygons).clip(mesh.polygons, .lessThan)
+        let ap = BSP(mesh.polygons).clip(polygons, .greaterThan)
+        let bp = BSP(polygons).clip(mesh.polygons, .lessThan)
         return Mesh(unchecked: ap + bp.map { $0.inverted() })
     }
 
@@ -91,8 +91,8 @@ public extension Mesh {
     ///          +-------+            +-------+
     ///
     func xor(_ mesh: Mesh) -> Mesh {
-        let absp = BSPNode(polygons)
-        let bbsp = BSPNode(mesh.polygons)
+        let absp = BSP(polygons)
+        let bbsp = BSP(mesh.polygons)
         // TODO: combine clip operations
         let ap1 = bbsp.clip(polygons, .greaterThan)
         let bp1 = absp.clip(mesh.polygons, .lessThan)
@@ -123,8 +123,8 @@ public extension Mesh {
     ///          +-------+
     ///
     func intersect(_ mesh: Mesh) -> Mesh {
-        let ap = BSPNode(mesh.polygons).clip(polygons, .lessThan)
-        let bp = BSPNode(polygons).clip(mesh.polygons, .lessThanEqual)
+        let ap = BSP(mesh.polygons).clip(polygons, .lessThan)
+        let bp = BSP(polygons).clip(mesh.polygons, .lessThanEqual)
         return Mesh(unchecked: ap + bp)
     }
 
@@ -147,9 +147,9 @@ public extension Mesh {
     ///
     func stencil(_ mesh: Mesh) -> Mesh {
         // TODO: combine clip operations
-        let bsp = BSPNode(mesh.polygons)
+        let bsp = BSP(mesh.polygons)
         let outside = bsp.clip(polygons, .greaterThan)
-        let inside = bsp.clip(mesh.polygons, .lessThanEqual)
+        let inside = bsp.clip(polygons, .lessThanEqual)
         return Mesh(unchecked: outside + inside.map {
             Polygon(
                 unchecked: $0.vertices,
@@ -218,7 +218,7 @@ public extension Mesh {
         .rotated(by: rotation)
         .translated(by: plane.normal * plane.w)
         // Clip rect
-        return Mesh(mesh.polygons + BSPNode(polygons).clip([rect], .lessThan))
+        return Mesh(mesh.polygons + BSP(polygons).clip([rect], .lessThan))
     }
 }
 
