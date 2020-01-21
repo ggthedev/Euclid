@@ -42,7 +42,19 @@ private class BSPNode {
             return nil
         }
         self.plane = plane
-        insert(polygons, isConvex: isConvex)
+        guard isConvex else {
+            insert(polygons, isConvex: isConvex)
+            return
+        }
+        // Use fast bsp constructions
+        var parent = self
+        parent.polygons = [polygons[0]]
+        for polygon in polygons.dropFirst() {
+            let node = BSPNode(plane: polygon.plane, parent: parent)
+            node.polygons = [polygon]
+            parent.back = node
+            parent = node
+        }
     }
 
     private init(plane: Plane, parent: BSPNode?) {
@@ -153,13 +165,8 @@ private class BSPNode {
                 case .back:
                     back.append(polygon)
                 case .spanning:
-                    if isConvex {
-                        front.append(polygon)
-                        back.append(polygon)
-                    } else {
-                        var id = 0
-                        polygon.split(spanning: node.plane, &front, &back, &id)
-                    }
+                    var id = 0
+                    polygon.split(spanning: node.plane, &front, &back, &id)
                 }
             }
 
